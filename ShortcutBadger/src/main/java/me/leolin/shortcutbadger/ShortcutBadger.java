@@ -60,7 +60,7 @@ public final class ShortcutBadger {
         BADGERS.add(EverythingMeHomeBadger.class);
     }
 
-    private static Badger sShortcutBadger;
+    private static List<Badger> sShortcutBadgers;
     private static ComponentName sComponentName;
 
     /**
@@ -89,17 +89,23 @@ public final class ShortcutBadger {
      * @param badgeCount Desired badge count
      */
     public static void applyCountOrThrow(Context context, int badgeCount) throws ShortcutBadgeException {
-        if (sShortcutBadger == null) {
+        if (sShortcutBadgers == null) {
             boolean launcherReady = initBadger(context);
 
             if (!launcherReady)
                 throw new ShortcutBadgeException("No default launcher available");
         }
-
-        try {
-            sShortcutBadger.executeBadge(context, sComponentName, badgeCount);
-        } catch (Exception e) {
-            throw new ShortcutBadgeException("Unable to execute badge", e);
+        boolean isSuccess = false;
+        for (Badger badger : sShortcutBadgers) {
+            try {
+                badger.executeBadge(context, sComponentName, badgeCount);
+            } catch (Exception e) {
+                continue;
+            }
+            isSuccess = true;
+        }
+        if (!isSuccess) {
+            throw new ShortcutBadgeException("Unable to execute badge");
         }
     }
 
@@ -140,7 +146,9 @@ public final class ShortcutBadger {
                             Log.i(LOG_TAG, "Checking if platform supports badge counters, attempt "
                                     + String.format("%d/%d.", i + 1, SUPPORTED_CHECK_ATTEMPTS));
                             if (initBadger(context)) {
-                                sShortcutBadger.executeBadge(context, sComponentName, 0);
+                                for (Badger badger : sShortcutBadgers) {
+                                    badger.executeBadge(context, sComponentName, 0);
+                                }
                                 sIsBadgeCounterSupported = true;
                                 Log.i(LOG_TAG, "Badge counter is supported in this platform.");
                                 break;
@@ -195,6 +203,8 @@ public final class ShortcutBadger {
             return false;
         }
 
+        sShortcutBadgers = new LinkedList<Badger>();
+
         sComponentName = launchIntent.getComponent();
 
         Intent intent = new Intent(Intent.ACTION_MAIN);
@@ -211,23 +221,23 @@ public final class ShortcutBadger {
                 } catch (Exception ignored) {
                 }
                 if (shortcutBadger != null && shortcutBadger.getSupportLaunchers().contains(currentHomePackage)) {
-                    sShortcutBadger = shortcutBadger;
+                    sShortcutBadgers.add(shortcutBadger);
                     break;
                 }
             }
         }
 
-        if (sShortcutBadger == null) {
+        if (sShortcutBadgers.size() == 0) {
             if (Build.MANUFACTURER.equalsIgnoreCase("ZUK"))
-                sShortcutBadger = new ZukHomeBadger();
+                sShortcutBadgers.add(new ZukHomeBadger());
             else if (Build.MANUFACTURER.equalsIgnoreCase("OPPO"))
-                sShortcutBadger = new OPPOHomeBader();
+                sShortcutBadgers.add(new OPPOHomeBader());
             else if (Build.MANUFACTURER.equalsIgnoreCase("VIVO"))
-                sShortcutBadger = new VivoHomeBadger();
+                sShortcutBadgers.add(new VivoHomeBadger());
             else if (Build.MANUFACTURER.equalsIgnoreCase("ZTE"))
-                sShortcutBadger = new ZTEHomeBadger();
+                sShortcutBadgers.add(new ZTEHomeBadger());
             else
-                sShortcutBadger = new DefaultBadger();
+                sShortcutBadgers.add(new DefaultBadger());
         }
 
         return true;
